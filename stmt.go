@@ -324,7 +324,11 @@ func checkNamedValue(value *driver.NamedValue) error {
 	case []byte:
 	case [][]byte:
 	case int:
+	case *int:
 	case []int:
+	case uint:
+	case *uint:
+	case []uint:
 	case int64:
 	case []int64:
 	case *int64:

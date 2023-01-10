@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/uuid"
 	"github.com/tarantool/go-tarantool"
 )
 
@@ -202,6 +203,73 @@ func TestPreparedQuery(t *testing.T) {
 	}
 }
 
+func TestAllTypeExec(t *testing.T) {
+	db, teardown := setupTestDBConnection(t)
+	defer teardown()
+
+	q := `INSERT INTO "TestTypes" VALUES
+	    (?, ?, ` + // boolean
+		`	?, ` + // integer
+		`	?, ` + // unsigned
+		`	?, ` + // double
+		`	?, ` + // number
+		`	?, ` + // decimal
+		`	?, ` + // string
+		// `	?, ` + // varbinary
+		`	? ` + // uuid
+		`)`
+	args1 := []any{
+		1,
+		true,
+		int(42),
+		uint(43),
+		float64(3.14),
+		float64(3.14),
+		float64(3.14),
+		"hello",
+		// []byte("hello"),
+		uuid.New(),
+	}
+	_, err := db.ExecContext(context.Background(), q, args1...)
+	if err != nil {
+		t.Fatalf("unexpected error for ExecContext: %v", err)
+	}
+}
+
+func TestAllPointersTypeExec(t *testing.T) {
+	db, teardown := setupTestDBConnection(t)
+	defer teardown()
+
+	q := `INSERT INTO "TestTypes" VALUES
+	    (?, ?, ` + // boolean
+		`	?, ` + // integer
+		`	?, ` + // unsigned
+		`	?, ` + // double
+		`	?, ` + // number
+		`	?, ` + // decimal
+		`	?, ` + // string
+		// `	?, ` + // varbinary
+		`	? ` + // uuid
+		`)`
+
+	args := []any{
+		1,
+		func() *bool { v := true; return &v }(),
+		func() *int { v := int(42); return &v }(),
+		func() *uint { v := uint(43); return &v }(),
+		func() *float64 { v := float64(3.14); return &v }(),
+		func() *float64 { v := float64(3.14); return &v }(),
+		func() *float64 { v := float64(3.14); return &v }(),
+		func() *string { v := "hello"; return &v }(),
+		// []byte("hello"),
+		func() *uuid.UUID { v := uuid.New(); return &v }(),
+	}
+	_, err := db.ExecContext(context.Background(), q, args...)
+	if err != nil {
+		t.Fatalf("unexpected error for ExecContext: %v", err)
+	}
+}
+
 func setupTestDBConnection(t *testing.T) (db *sql.DB, teardown func()) {
 	dsn := getTestDBdsn(t)
 	teardown = setupTestDBData(t, dsn)
@@ -304,6 +372,40 @@ func creaeteTestDBSchema(t *testing.T, config *connectorConfig) (clear func()) {
 		t.Fatalf("unexpected error for conn.Call(space.Test:create_index): %v", err)
 	}
 
+	// Space TestTypes
+	// 	| id | boolean          | integer | unsigned | double | number | decimal | string | varbinary | uuid | datetime | interval |
+	// |----|------------------|---------|----------|--------|--------|---------|--------|-----------|------|----------|----------|
+	_, err = conn.Call("box.schema.space.create", []interface{}{
+		"TestTypes",
+		map[string]bool{"if_not_exists": true}})
+	if err != nil {
+		t.Logf("unexpected error for conn.Call(space.create): %v", err)
+	}
+	_, err = conn.Call("box.space.TestTypes:format", [][]map[string]string{
+		{
+			{"name": "id", "type": "number"},
+			{"name": "boolean", "type": "boolean"},
+			{"name": "integer", "type": "integer"},
+			{"name": "unsigned", "type": "unsigned"},
+			{"name": "double", "type": "double"},
+			{"name": "number", "type": "number"},
+			{"name": "decimal", "type": "decimal"},
+			{"name": "string", "type": "string"},
+			// {"name": "varbinary", "type": "varbinary"},
+			{"name": "uuid", "type": "uuid"},
+		}})
+	if err != nil {
+		t.Fatalf("unexpected error for conn.Call(space.TestTypes:format): %v", err)
+	}
+	_, err = conn.Call("box.space.TestTypes:create_index", []interface{}{
+		"primary",
+		map[string]interface{}{
+			"parts":         []string{"id"},
+			"if_not_exists": true}})
+	if err != nil {
+		t.Fatalf("unexpected error for conn.Call(space.TestTypes:create_index): %v", err)
+	}
+
 	clear = func() {
 		conn, err := tarantool.Connect(config.connStr,
 			tarantool.Opts{
@@ -316,6 +418,7 @@ func creaeteTestDBSchema(t *testing.T, config *connectorConfig) (clear func()) {
 		defer conn.Close()
 		conn.Call("box.space.BAR:drop", []interface{}{})
 		conn.Call("box.space.Test:drop", []interface{}{})
+		// conn.Call("box.space.TestTypes:drop", []interface{}{})
 	}
 	return
 }
