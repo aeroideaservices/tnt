@@ -130,7 +130,7 @@ func (c *conn) Prepare(query string) (driver.Stmt, error) {
 }
 
 func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
-	return &stmt{conn: c, query: query}, nil
+	return &stmt{conn: c, rawQuery: query}, nil
 }
 
 func (c *conn) Close() error {

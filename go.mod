@@ -3,6 +3,7 @@ module github.com/aeroideaservices/tnt
 go 1.19
 
 require (
+	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
 	github.com/tarantool/go-tarantool v1.9.0
 	golang.org/x/exp v0.0.0-20221217163422-3c43f8badb15

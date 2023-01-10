@@ -37,6 +37,7 @@ func NewStmt(conn *conn, rawQuery string, stream *tarantool.Stream) *stmt {
 		conn:     conn,
 		rawQuery: rawQuery,
 		query:    rawQuery,
+		stream:   stream,
 	}
 }
 
@@ -94,7 +95,6 @@ func (s *stmt) Query(args []driver.Value) (driver.Rows, error) {
 
 func (s *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	s.resetQuery()
-
 	err := s.buildArgs(args)
 	if err != nil {
 		return nil, fmt.Errorf("build args error: %w", err)
