@@ -277,6 +277,11 @@ func makeArgs(args []driver.NamedValue) ([]interface{}, error) {
 
 func covertValueForCustomTypes(value driver.Value) driver.Value {
 	switch reflect.TypeOf(value) {
+	// временный вариант, т.к. с *uuid.UUID(nil) не работает msgpack, а просто с nil работает
+	case reflect.PointerTo(reflect.TypeOf(uuid.UUID{})):
+		if reflect.DeepEqual(value, func() *uuid.UUID { _ = uuid.New(); return nil }()) {
+			return driver.Value(nil)
+		}
 	case reflect.TypeOf(time.Time{}):
 		t := value.(time.Time)
 		v := interface{}(t.ToTime().Format(time.RFC3339Nano))

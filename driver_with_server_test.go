@@ -418,7 +418,7 @@ func creaeteTestDBSchema(t *testing.T, config *connectorConfig) (clear func()) {
 		defer conn.Close()
 		conn.Call("box.space.BAR:drop", []interface{}{})
 		conn.Call("box.space.Test:drop", []interface{}{})
-		// conn.Call("box.space.TestTypes:drop", []interface{}{})
+		conn.Call("box.space.TestTypes:drop", []interface{}{})
 	}
 	return
 }
