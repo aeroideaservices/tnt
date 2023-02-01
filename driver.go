@@ -83,8 +83,9 @@ func newConnector(d *Driver, dsn string) (*connector, error) {
 		return nil, err
 	}
 	connOpts := tarantool.Opts{
-		User: connectorConfig.user,
-		Pass: connectorConfig.pass,
+		User:        connectorConfig.user,
+		Pass:        connectorConfig.pass,
+		Concurrency: 1 << 8,
 	}
 	c := &connector{
 		driver:                  d,
