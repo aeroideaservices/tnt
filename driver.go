@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/tarantool/go-tarantool"
 )
@@ -83,9 +84,11 @@ func newConnector(d *Driver, dsn string) (*connector, error) {
 		return nil, err
 	}
 	connOpts := tarantool.Opts{
-		User:        connectorConfig.user,
-		Pass:        connectorConfig.pass,
-		Concurrency: 1 << 8,
+		User:          connectorConfig.user,
+		Pass:          connectorConfig.pass,
+		Reconnect:     3 * time.Second,
+		MaxReconnects: 3,
+		Concurrency:   1 << 8,
 	}
 	c := &connector{
 		driver:                  d,
