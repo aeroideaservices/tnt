@@ -138,6 +138,7 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 }
 
 func (c *conn) Close() error {
+	fmt.Println("[TNT] Close connection")
 	c.connector.driver.mu.Lock()
 	delete(c.connector.driver.connectors, c.connector.dsn)
 	c.connector.driver.mu.Unlock()
