@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/tarantool/go-tarantool"
@@ -44,6 +45,7 @@ type connector struct {
 	tarantoolConnectionOpts tarantool.Opts
 	initConnection          sync.Once
 	conn                    *tarantool.Connection
+	counter                 int32
 	connErr                 error
 }
 
@@ -111,6 +113,7 @@ func openDriverConn(ctx context.Context, c *connector) (driver.Conn, error) {
 	if c.connErr != nil {
 		return nil, c.connErr
 	}
+	atomic.AddInt32(&c.counter, 1)
 	return &conn{
 		connector: c,
 		tConn:     c.conn,
@@ -138,7 +141,11 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 }
 
 func (c *conn) Close() error {
-	fmt.Println("[TNT] Close connection")
+
+	if count := atomic.AddInt32(&c.connector.counter, -1); count > 0 {
+		return nil
+	}
+
 	c.connector.driver.mu.Lock()
 	delete(c.connector.driver.connectors, c.connector.dsn)
 	c.connector.driver.mu.Unlock()
