@@ -8,8 +8,11 @@ import (
 
 	"github.com/aeroideaservices/tnt/time"
 	"github.com/google/uuid"
+
 	"github.com/tarantool/go-tarantool"
 	"github.com/tarantool/go-tarantool/datetime"
+
+	"github.com/tarantool/go-tarantool/decimal"
 	_ "github.com/tarantool/go-tarantool/uuid"
 )
 
@@ -50,9 +53,6 @@ func (r *rows) Next(dest []driver.Value) error {
 			case reflect.Bool:
 				dest[i] = v.Bool()
 			case reflect.Float32, reflect.Float64:
-				if !ok {
-					return errors.New("wrong float32 type assertion")
-				}
 				dest[i] = v.Float()
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				dest[i] = v.Int()
@@ -80,6 +80,12 @@ func (r *rows) Next(dest []driver.Value) error {
 						return errors.New("wrong tnt.Time type assertion")
 					}
 					dest[i] = val.ToTime().Format(time.RFC3339Nano)
+				case reflect.TypeOf(decimal.Decimal{}):
+					val, ok := row[i].(decimal.Decimal)
+					if !ok {
+						return errors.New("wrong dacimal type assertion")
+					}
+					dest[i] = val
 				}
 			}
 

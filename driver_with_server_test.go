@@ -234,6 +234,52 @@ func TestAllTypeExec(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error for ExecContext: %v", err)
 	}
+
+	type tts struct {
+		id int
+		a1 bool
+		a2 int
+		a3 uint
+		a4 float64
+		a5 float64
+		a6 float64
+		a7 string
+		a8 uuid.UUID
+	}
+
+	q = `SELECT * FROM "TestTypes"`
+	rows, err := db.QueryContext(context.Background(), q)
+	if err != nil {
+		t.Fatalf("unexpected error for QueryContext: %v", err)
+	}
+	var s tts
+	for rows.Next() {
+		err = rows.Scan(
+			&s.id,
+			&s.a1,
+			&s.a2,
+			&s.a3,
+			&s.a4,
+			&s.a5,
+			&s.a6,
+			&s.a7,
+			&s.a8)
+
+		if err != nil {
+			t.Fatalf("unexpected error for Scan: %v", err)
+		}
+	}
+	func() {
+		t.Log(s.id)
+		t.Log(s.a1)
+		t.Log(s.a2)
+		t.Log(s.a3)
+		t.Log(s.a4)
+		t.Log(s.a5)
+		t.Log(s.a6)
+		t.Log(s.a7)
+		t.Log(s.a8)
+	}()
 }
 
 func TestAllPointersTypeExec(t *testing.T) {
