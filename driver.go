@@ -15,10 +15,14 @@ import (
 
 var _ driver.DriverContext = &Driver{}
 
+// Инициализация драйвера
+// (для sql.Open("tnt", dsn))
 func init() {
 	sql.Register("tnt", &Driver{connectors: make(map[string]*connector)})
 }
 
+// Имплементация интерфейса
+// https://pkg.go.dev/database/sql/driver@go1.20.1#Driver
 type Driver struct {
 	mu         sync.Mutex
 	connectors map[string]*connector
@@ -36,6 +40,7 @@ func (d *Driver) OpenConnector(name string) (driver.Connector, error) {
 	return newConnector(d, name)
 }
 
+// Имплементация интерфейса https://pkg.go.dev/database/sql/driver@go1.20.1#Connector
 type connector struct {
 	driver          *Driver
 	dsn             string
@@ -54,6 +59,9 @@ type connectorConfig struct {
 	pass    string
 }
 
+// Парсим конфиг из dsn подобного этому tarantool://admin:password@localhost:3301
+// часть "tarantool://" добавлена для совместимости с url.Parse
+// что бы не парсить вручную и не заморачиваться с регулярками
 func extractConnectorConfig(dsn string) (connectorConfig, error) {
 	c := connectorConfig{}
 	u, err := url.Parse(dsn)
@@ -73,6 +81,8 @@ func extractConnectorConfig(dsn string) (connectorConfig, error) {
 	return c, nil
 }
 
+// создаем новый коннектор, мютексы добавлены по примеру драйвера, на основе которого писался этот
+// задел на будущее для репликаций, шардирования и т.п.
 func newConnector(d *Driver, dsn string) (*connector, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -102,6 +112,12 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	return openDriverConn(ctx, c)
 }
 
+// Открываем "внутреннее(database/sql)" соединение, также инициализируем tarantool соединение
+//
+// Атомарное добавление 1 нужно для многопоточности, что бы tarantool соединение закрывалось
+// только если закрывается последнее соединение в последней горутине,
+// эта штука позволила решить проблему, при при которой драйвер переставал работать
+// при количестве горутин > 4
 func openDriverConn(ctx context.Context, c *connector) (driver.Conn, error) {
 	c.initConnection.Do(func() {
 		c.conn, c.connErr = tarantool.Connect(c.connectorConfig.connStr, c.tarantoolConnectionOpts)
@@ -120,6 +136,8 @@ func (c *connector) Driver() driver.Driver {
 	return c.driver
 }
 
+// Имплементация интерфейса https://pkg.go.dev/database/sql/driver@go1.20.1#Conn
+// и других дополнительных, позволяющих выполнять запросы
 type conn struct {
 	connector *connector
 	closed    bool
@@ -128,6 +146,7 @@ type conn struct {
 	inTx      bool
 }
 
+// Использование prepare statement'ов
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
 	return c.PrepareContext(context.Background(), query)
 }
@@ -136,6 +155,7 @@ func (c *conn) PrepareContext(ctx context.Context, query string) (driver.Stmt, e
 	return &stmt{conn: c, rawQuery: query}, nil
 }
 
+// Закрытиве "внтуреннего" соединения
 func (c *conn) Close() error {
 
 	if count := atomic.AddInt32(&c.connector.counter, -1); count > 0 {
@@ -149,6 +169,8 @@ func (c *conn) Close() error {
 	return c.tConn.Close()
 }
 
+// Начало транцакции
+// По новому стандарту следует использовать контекстные версии, обычне сделаны для совмстимости
 func (c *conn) Begin() (driver.Tx, error) {
 	return c.BeginTx(context.Background(), driver.TxOptions{})
 }
@@ -158,6 +180,9 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 		return nil, errors.New("already in transaction")
 	}
 
+	// открываем "поток" - тарантуловский аналог обычных транзакций
+	// https://www.tarantool.io/en/doc/latest/concepts/atomic/txn_mode_mvcc/#streams-and-interactive-transactions
+	// для работы необходимо на сервере установить переменную memtx_use_mvcc_engine=true
 	stream, err := c.tConn.NewStream()
 	if err != nil {
 		return nil, fmt.Errorf("can't create stream: %w", err)
@@ -172,6 +197,8 @@ func (c *conn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, e
 	return c.tx, nil
 }
 
+// Выполнение DML запроса, тут я принял решение сделать это все через stmt, в силу того, что это позволяет
+// удобнее работать с транзакциями
 func (c *conn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if c.inTx {
 		return c.tx.ExecContext(ctx, query, args)
@@ -179,6 +206,7 @@ func (c *conn) ExecContext(ctx context.Context, query string, args []driver.Name
 	return NewStmt(c, query, nil).ExecContext(ctx, args)
 }
 
+// Выполнение запросов, возвращающих строки
 func (c *conn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if c.inTx {
 		return c.tx.QueryContext(ctx, query, args)
@@ -194,6 +222,7 @@ func (c *conn) Ping(ctx context.Context) error {
 	return err
 }
 
+// Проверка на допустимый тип аргументов (передающихся через ?)
 func (c *conn) CheckNamedValue(value *driver.NamedValue) error {
 	return checkNamedValue(value)
 }

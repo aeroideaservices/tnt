@@ -54,6 +54,25 @@ func (s *stmt) NumInput() int {
 	return s.numArgs
 }
 
+/*
+	Алогитм работы с аргументами
+
+	Кастомные типы (время, uuid и т.п.) не проходят сами по себе и требуют CAST в самом запросе
+	(https://www.tarantool.io/ru/doc/latest/reference/reference_sql/sql_statements_and_clauses/#cast)
+	для простоты использования мы не хотим заставлять людей прописывать касты вручную,
+	для этого следующий ход модифицирует sql запрос автоматически
+
+	1. (parseArgs) Нужно пропарсить аргументы в запросе, именованные (:id) и неименованные (?)
+
+	2. (buildArgs) Теперь мы проходимся по пришешим к нам параметрам, которые мы хотим "поставить" на место ?,
+	сверяемся, что все норм по количеству/именам, через reflect определяем их тип и решаем, нужно ли
+	их кастить прямым образом (через CAST)
+
+	3. (modifyQuery) Последовательно проходимся по аргументам и вставляем CAST и нужный тип прямо в sql запрос
+
+	4. (makeArgs) Теперь уже преобразуем входные аргументы в нужный вид, который можно скормить функции из go-tarantool
+*/
+
 func (s *stmt) Exec(args []driver.Value) (driver.Result, error) {
 	return nil, errors.New("use ExecContext instead")
 }
@@ -73,8 +92,9 @@ func (s *stmt) ExecContext(ctx context.Context, args []driver.NamedValue) (drive
 	if err != nil {
 		return nil, err
 	}
+	// фактичесоке выполнение запроса
 	var r *tarantool.Response
-	if s.stream != nil {
+	if s.stream != nil { // проверка на то, что мы находимся в транзакции
 		req := tarantool.NewExecuteRequest(s.query).Args(tArgs)
 		r, err = s.stream.Do(req).Get()
 	} else {
@@ -108,7 +128,8 @@ func (s *stmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driv
 		return nil, err
 	}
 	var r *tarantool.Response
-	if s.stream != nil {
+	// фактичесоке выполнение запроса
+	if s.stream != nil { // проверка на то, что мы находимся в транзакции
 		req := tarantool.NewExecuteRequest(s.query).Args(tArgs)
 		r, err = s.stream.Do(req).Get()
 	} else {
@@ -135,12 +156,13 @@ const (
 	TypeNamed
 )
 
+// вспомогательная структура для работы с аргументами
 type arg struct {
-	pos      int
-	_type    int
-	name     string
-	castable bool
-	castType string
+	pos      int    // позиция в запросе (модифицируется при модификации запроса)
+	_type    int    // тип аргумента (именованный/неименованный)
+	name     string // имя (пустая строка при отсутствии)
+	castable bool   // требует ли каста в тарантуле
+	castType string // название тарантул-типа в который нужно кастить
 }
 
 func (s *stmt) parseArgs() {
@@ -225,6 +247,9 @@ func (s *stmt) buildArgs(sqlArgs []driver.NamedValue) error {
 		default:
 			s.args[i].castable = false
 		}
+		/*
+			todo: в текущей реализации есть проблема, именованные параметры можно использовать только один раз
+		*/
 		args = append(args[:idx], args[idx+1:]...)
 	}
 	s.argsBuilded = true
@@ -282,6 +307,7 @@ func covertValueForCustomTypes(value driver.Value) driver.Value {
 		if reflect.DeepEqual(value, func() *uuid.UUID { _ = uuid.New(); return nil }()) {
 			return driver.Value(nil)
 		}
+	// функция CAST таратула работатет со строчкой времени в формате RFC3339Nano
 	case reflect.TypeOf(time.Time{}):
 		t := value.(time.Time)
 		v := interface{}(t.ToTime().Format(time.RFC3339Nano))

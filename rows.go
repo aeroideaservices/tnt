@@ -16,8 +16,9 @@ import (
 	_ "github.com/tarantool/go-tarantool/uuid"
 )
 
+// Получаемые кортежи, иплементация интерфейса https://pkg.go.dev/database/sql/driver@go1.20.1#Rows
 type rows struct {
-	data      []interface{}
+	data      []interface{} // данные, приходящие из тарантула через библиотеку go-tarantool
 	cMetaData []tarantool.ColumnMetaData
 	isClosed  bool
 }
@@ -36,18 +37,23 @@ func (r *rows) Columns() []string {
 	return c
 }
 
+// проход по кортежам
 func (r *rows) Next(dest []driver.Value) error {
 	if r.isClosed {
 		return errors.New("Next called after Close")
 	}
 	if len(r.data) > 0 {
+		// забираем 1 кортеж из набора
 		row, ok := r.data[0].([]interface{})
 		if !ok {
 			return errors.New("bad type assertion, want []interface{}")
 		}
 		r.data = r.data[1:]
+
+		// сканим в destination
 		for i := 0; i < len(row); i++ {
 			switch v := reflect.ValueOf(row[i]); v.Kind() {
+			// базовые типы
 			case reflect.String:
 				dest[i] = v.String()
 			case reflect.Bool:
@@ -59,6 +65,7 @@ func (r *rows) Next(dest []driver.Value) error {
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 				dest[i] = v.Uint()
 			default:
+				// сложные типы
 				switch reflect.TypeOf(row[i]) {
 				case reflect.TypeOf(uuid.New()):
 					val, ok := row[i].(uuid.UUID)
@@ -67,20 +74,25 @@ func (r *rows) Next(dest []driver.Value) error {
 					}
 					// прикодим к строке, иначе не будет нормально работать
 					// https://github.com/google/uuid/blob/master/sql.go
+					// (тут нам повезло, что в google/uuid UUID имплементирует интерфейс сканера как раз для таких случаев)
 					dest[i] = val.String()
 				case reflect.TypeOf(datetime.Datetime{}):
+
+					// todo
 					val, ok := row[i].(datetime.Datetime)
 					if !ok {
 						return errors.New("wrong datetime type assertion")
 					}
 					dest[i] = val
 				case reflect.TypeOf(time.Time{}):
+					// кастомный тип-обртка для datetime тарантула, имплементирующий интерфейс сканера
 					val, ok := row[i].(time.Time)
 					if !ok {
 						return errors.New("wrong tnt.Time type assertion")
 					}
 					dest[i] = val.ToTime().Format(time.RFC3339Nano)
 				case reflect.TypeOf(decimal.Decimal{}):
+					// тип для поддержки float тарантула
 					val, ok := row[i].(decimal.Decimal)
 					if !ok {
 						return errors.New("wrong dacimal type assertion")
