@@ -4,7 +4,7 @@
 Go's [database/sql](https://golang.org/pkg/database/sql/) package 
 based on [go-tarantool](https://github.com/tarantool/go-tarantool) library.
 
-Example of usage 
+## Example of usage 
 
 ```go
 package main
@@ -61,3 +61,15 @@ func main() {
 	}
 }
 ```
+
+## Принцип работы
+
+В двух словах, все здесь нужно, что бы имплементировать [интерфейс](https://pkg.go.dev/database/sql/driver@go1.20.1#Driver)
+драйвера из библиотеки [database/sql](https://golang.org/pkg/database/sql/). 
+
+- Основная часть кода находится в файле `driver.go`
+- Часть, отвечающая за транзакции в файле `transaction.go`
+- Часть, отвечающая за сторки, которые мы получаем через SELECT `rows.go`
+- Часть, отвечающая за "выражения", а в нашем случае также и за фактическое обращение к тарантулу `stmt.go`
+
+Также в `stmt.go` находится часть, связанная с разобром аргуменов в SQL запросе и их касты для нестандартных типов
