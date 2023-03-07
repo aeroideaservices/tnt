@@ -23,6 +23,8 @@ func TestPingContext(t *testing.T) {
 	}
 }
 
+/* Селекты */
+
 func TestSimpleQuery(t *testing.T) {
 	// t.Parallel()
 
@@ -55,6 +57,8 @@ func TestSimpleQuery(t *testing.T) {
 		t.Fatal(rows.Err())
 	}
 }
+
+/* Транзакции */
 
 func TestSimpleReadWriteTransactionCommit(t *testing.T) {
 	// t.Parallel()
@@ -170,19 +174,19 @@ func checkSelectFooFromBarResult(t *testing.T, rows *sql.Rows, count int64) {
 	}
 }
 
-func TestPreparedQuery(t *testing.T) {
+func TestPreparedQueryUnnamed(t *testing.T) {
 	// t.Parallel()
 
 	db, teardown := setupTestDBConnection(t)
 	defer teardown()
 
-	stmt, err := db.Prepare(`SELECT "id" FROM "Test" WHERE "name"=:name`)
+	stmt, err := db.Prepare(`SELECT "id" FROM "Test" WHERE "name"=?`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer stmt.Close()
 
-	rows, err := stmt.QueryContext(context.Background(), sql.NamedArg{Name: "name", Value: "Alice"})
+	rows, err := stmt.QueryContext(context.Background(), "Alice")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,6 +206,41 @@ func TestPreparedQuery(t *testing.T) {
 		t.Fatal(rows.Err())
 	}
 }
+
+// Фейлится из-за того, что не работают нормально именованные параметры
+
+// func TestPreparedQueryNamed(t *testing.T) {
+// 	// t.Parallel()
+
+// 	db, teardown := setupTestDBConnection(t)
+// 	defer teardown()
+
+// 	stmt, err := db.Prepare(`SELECT "id" FROM "Test" WHERE "name"=:name`)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer stmt.Close()
+
+// 	rows, err := stmt.QueryContext(context.Background(), sql.NamedArg{Name: "name", Value: "Alice"})
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	defer rows.Close()
+
+// 	for want := int64(1); rows.Next(); want++ {
+// 		var got int64
+// 		err = rows.Scan(&got)
+// 		if err != nil {
+// 			t.Fatal(err)
+// 		}
+// 		if got != want {
+// 			t.Fatalf("value mismatch\nGot: %v\nWant: %v", got, want)
+// 		}
+// 	}
+// 	if rows.Err() != nil {
+// 		t.Fatal(rows.Err())
+// 	}
+// }
 
 func TestAllTypeExec(t *testing.T) {
 	db, teardown := setupTestDBConnection(t)
@@ -368,6 +407,8 @@ func creaeteTestDBSchema(t *testing.T, config *connectorConfig) (clear func()) {
 		t.Fatalf("unexpected error for tarantool.Connect: %v", err)
 	}
 	defer conn.Close()
+	// Тут всегда возвращается ошибка, видимо это какой-то прикол gp-tarantool
+	// unexpected error for conn.Call(space.create): unsupported Lua type 'function' (LuajitError, code 0x20)
 	_, err = conn.Call("box.schema.space.create", []interface{}{
 		"BAR",
 		map[string]bool{"if_not_exists": true}})

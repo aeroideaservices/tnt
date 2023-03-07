@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	db := sql.Open("tnt", "tarantool://user:password@localhost:3301")
+	db, _ := sql.Open("tnt", "tarantool://user:password@localhost:3301")
 	ctx := context.Background()
 	_, err := db.ExecContext(ctx, `CREATE TABLE modules (name STRING, size INTEGER, purpose STRING, PRIMARY KEY (name));`)
 	if err != nil {
@@ -32,7 +32,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rows, err := db.QueryContext(ctx, `SELECT size FROM modules WHERE name = 'clock';`)
+	rows, err := db.QueryContext(ctx, `SELECT size FROM modules WHERE name = ?;`, "clock")
 	if err != nil {
 		log.Fatal(err)
 	}

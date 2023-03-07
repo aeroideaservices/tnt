@@ -41,7 +41,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rows, err := db.QueryContext(ctx, `SELECT size FROM modules WHERE name = 'clock';`)
+	rows, err := db.QueryContext(ctx, `SELECT size FROM modules WHERE name = ?;`, "clock")
 	if err != nil {
 		log.Fatal(err)
 	}

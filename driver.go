@@ -147,6 +147,10 @@ type conn struct {
 }
 
 // Использование prepare statement'ов
+
+// todo: сейчас это просто на вид подготовленные выражения, по факту же
+// все выполняется без подготовки и хотелось бы это дело перевести на настоящие
+// prepared из go-tarantool
 func (c *conn) Prepare(query string) (driver.Stmt, error) {
 	return c.PrepareContext(context.Background(), query)
 }

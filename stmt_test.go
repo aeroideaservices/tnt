@@ -83,7 +83,7 @@ func TestBuildArgs(t *testing.T) {
 			},
 			wantError: false,
 		},
-		{
+		{ // todo
 			input: `SELECT * FROM "test" WHERE "id"=:id`,
 			sqlArgs: []driver.NamedValue{
 				{
